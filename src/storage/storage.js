@@ -8,7 +8,7 @@ export const DEFAULT_CONFIG = {
   googleClientId: "" // si está vacío, luego podemos usar uno por defecto en googleAuth.js
 };
 
-const CONFIG_KEY = "calenlytics_config";
+const CONFIG_KEY = "calendar-analytics_config";
 
 export function getConfig() {
   return new Promise((resolve) => {

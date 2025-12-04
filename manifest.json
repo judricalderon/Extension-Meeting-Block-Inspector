@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Calenlytics",
+  "name": "Calendar-Analytics",
   "version": "0.0.1",
   "description": "Analyze company calendars to detect meeting patterns and free time slots, and export reports as CSV.",
   "icons": {
