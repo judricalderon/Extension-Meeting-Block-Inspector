@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calenlytics – Options</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <h1>Calenlytics – Settings</h1>
+
+  <section>
+    <h2>Workday</h2>
+    <label>
+      Workday start (HH:MM):
+      <input type="time" id="workdayStart" />
+    </label>
+    <label>
+      Workday end (HH:MM):
+      <input type="time" id="workdayEnd" />
+    </label>
+  </section>
+
+  <section>
+    <h2>Block rules</h2>
+    <label>
+      Minimum block length (minutes):
+      <input type="number" id="minBlockMinutes" min="1" />
+    </label>
+    <label>
+      Maximum standard block length (minutes):
+      <input type="number" id="maxStandardBlockMinutes" min="1" />
+    </label>
+    <p class="help">
+      Meetings longer than this value will be highlighted as long meetings in the report.
+    </p>
+  </section>
+
+  <section>
+    <h2>Google OAuth (advanced)</h2>
+    <p class="help">
+      These fields are optional. If you leave them empty, the extension will use the
+      built-in default Client ID. Use this only if you want to plug in your own
+      Google Cloud project.
+    </p>
+    <label>
+      Google Client ID:
+      <input
+        type="text"
+        id="googleClientId"
+        placeholder="xxxxxx.apps.googleusercontent.com"
+      />
+    </label>
+  </section>
+
+  <div class="buttons">
+    <button id="saveBtn">Save settings</button>
+    <button id="resetBtn">Reset to defaults</button>
+  </div>
+
+  <p id="status" class="status"></p>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
