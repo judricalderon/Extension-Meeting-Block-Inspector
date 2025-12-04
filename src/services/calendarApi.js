@@ -1,5 +1,3 @@
-// src/services/calendarApi.js
-
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
 /**
@@ -11,6 +9,8 @@ const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
  * @returns {Promise<Array<Object>>} Normalized events
  */
 export async function fetchEventsForUser(calendarId, dateRange, accessToken) {
+  console.log("[Calendar-Analytics] fetchEventsForUser →", calendarId);
+
   const encodedCalendarId = encodeURIComponent(calendarId);
 
   const params = new URLSearchParams({
@@ -42,27 +42,58 @@ export async function fetchEventsForUser(calendarId, dateRange, accessToken) {
 }
 
 /**
- * Convenience function: fetch events for multiple calendars in parallel.
+ * Fetch events for multiple calendars in parallel.
+ * Devuelve:
+ *  - events: todos los eventos de los calendarios que sí se pudieron leer
+ *  - failures: lista de calendarios que fallaron
  *
  * @param {string[]} calendarIds
  * @param {{ start: string, end: string }} dateRange
  * @param {string} accessToken
- * @returns {Promise<Array<Object>>} Array of events (with calendarId attached)
+ * @returns {Promise<{ events: Array<Object>, failures: Array<Object> }>}
  */
 export async function fetchEventsForUsers(calendarIds, dateRange, accessToken) {
-  const promises = calendarIds.map((id) =>
-    fetchEventsForUser(id, dateRange, accessToken)
-  );
+  console.log("[Calendar-Analytics] fetchEventsForUsers →", calendarIds);
+
+  const failures = [];
+
+  const promises = calendarIds.map(async (id) => {
+    try {
+      return await fetchEventsForUser(id, dateRange, accessToken);
+    } catch (err) {
+      console.error(
+        "[Calendar-Analytics] Failed fetching events for calendar:",
+        id,
+        err
+      );
+      failures.push({
+        calendarId: id,
+        status: err.status || null,
+        reason:
+          err.status === 404
+            ? "not_found_or_no_access"
+            : err.status === 403
+            ? "forbidden"
+            : "other_error",
+        message: err.message || "Calendar could not be read"
+      });
+      return [];
+    }
+  });
 
   const results = await Promise.all(promises);
-  // results es un array de arrays → aplastamos en uno solo
-  return results.flat();
+  const events = results.flat();
+
+  return { events, failures };
 }
 
 /**
  * Perform an authenticated GET request and parse JSON.
+ * En 404/403 lanzamos error con status para poder registrar la falla.
  */
 async function fetchJsonWithAuth(url, accessToken) {
+  console.log("[Calendar-Analytics] API call →", url);
+
   const res = await fetch(url, {
     method: "GET",
     headers: {
@@ -71,9 +102,16 @@ async function fetchJsonWithAuth(url, accessToken) {
   });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.error("[Calendar-Analytics] Calendar API error:", res.status, text);
-    throw new Error(`Calendar API error: ${res.status}`);
+    const bodyText = await res.text().catch(() => "");
+    console.error(
+      `[Calendar-Analytics] Calendar API error ${res.status}:`,
+      bodyText
+    );
+
+    const error = new Error(`Calendar API error: ${res.status}`);
+    error.status = res.status;
+    error.body = bodyText;
+    throw error;
   }
 
   return res.json();
@@ -102,9 +140,9 @@ function normalizeEvent(ev, calendarId) {
     eventId: ev.id,
     summary: ev.summary || "",
     description: ev.description || "",
-    start,        // ISO string
-    end,          // ISO string
+    start, // ISO string
+    end,   // ISO string
     allDay,
-    raw: ev       // opcional, por si luego quieres más campos
+    raw: ev // original event (optional)
   };
 }

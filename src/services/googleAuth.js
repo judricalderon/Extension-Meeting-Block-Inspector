@@ -3,6 +3,13 @@
 import { getConfig } from "../storage/storage.js";
 
 const TOKEN_KEY = "calendar_analytics_token";
+// al inicio del archivo ya tienes TOKEN_KEY, getStoredToken, isTokenExpired...
+
+export async function hasValidToken() {
+  const stored = await getStoredToken();
+  return stored && !isTokenExpired(stored);
+}
+
 
 export async function getAccessToken() {
   const stored = await getStoredToken();

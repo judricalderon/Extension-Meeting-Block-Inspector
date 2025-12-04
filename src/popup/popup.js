@@ -1,7 +1,9 @@
 // src/popup/popup.js
 
+import { authenticateUser, hasValidToken } from "../services/googleAuth.js";
+
 let emailsFromCsv = [];
-let isAuthenticated = false; // luego lo actualizaremos con el flujo real de OAuth
+let isAuthenticated = false;
 
 const connectBtn = document.getElementById("connectBtn");
 const authStatusEl = document.getElementById("authStatus");
@@ -11,17 +13,30 @@ const generateBtn = document.getElementById("generateBtn");
 const generateStatusEl = document.getElementById("generateStatus");
 
 function updateGenerateButtonState() {
-  // Por ahora solo verificamos que haya emails;
-  // luego puedes añadir también `isAuthenticated`
-  const canGenerate = emailsFromCsv.length > 0 /* && isAuthenticated */;
+  const canGenerate = emailsFromCsv.length > 0 && isAuthenticated;
   generateBtn.disabled = !canGenerate;
 }
 
-import { authenticateUser } from "../services/googleAuth.js";
+// Al abrir el popup, revisar si ya hay token válido
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const valid = await hasValidToken();
+    if (valid) {
+      isAuthenticated = true;
+      authStatusEl.textContent = "Connected to Google Calendar ✔";
+      authStatusEl.style.color = "#22c55e";
+    }
+  } catch (e) {
+    console.error("Error checking token", e);
+  }
+  updateGenerateButtonState();
+});
 
+// Botón: Connect with Google
 connectBtn.addEventListener("click", async () => {
   try {
     const token = await authenticateUser();
+    console.log("Got token:", token);
     authStatusEl.textContent = "Connected to Google Calendar ✔";
     authStatusEl.style.color = "#22c55e";
     isAuthenticated = true;
@@ -33,7 +48,7 @@ connectBtn.addEventListener("click", async () => {
   }
 });
 
-
+// Manejo del CSV
 csvInput.addEventListener("change", () => {
   const file = csvInput.files?.[0];
   emailsFromCsv = [];
@@ -133,7 +148,7 @@ function getSelectedDateRange() {
 
   // this week: from Monday to Sunday of current week
   const day = now.getDay(); // 0 (Sun) - 6 (Sat)
-  const diffToMonday = (day === 0 ? -6 : 1) - day; // make Monday = 1
+  const diffToMonday = (day === 0 ? -6 : 1) - day;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diffToMonday);
   const sunday = new Date(monday);
@@ -147,8 +162,15 @@ function getSelectedDateRange() {
 
 generateBtn.addEventListener("click", () => {
   generateStatusEl.textContent = "";
+
   if (emailsFromCsv.length === 0) {
     generateStatusEl.textContent = "Please upload a CSV file with at least one email.";
+    generateStatusEl.style.color = "#f97316";
+    return;
+  }
+
+  if (!isAuthenticated) {
+    generateStatusEl.textContent = "Please connect to Google Calendar first.";
     generateStatusEl.style.color = "#f97316";
     return;
   }
