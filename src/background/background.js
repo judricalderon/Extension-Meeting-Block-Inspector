@@ -1,3 +1,5 @@
+// src/background/background.js
+
 import { getAccessToken } from "../services/googleAuth.js";
 import { fetchEventsForUsers } from "../services/calendarApi.js";
 import { analyzeCalendar } from "../services/calendarAnalyzer.js";
@@ -22,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleGenerateReport(payload) {
-  const { emails, dateRange } = payload;
+  const { emails, dateRange, selectedDates } = payload;
 
   if (!Array.isArray(emails) || emails.length === 0) {
     throw new Error("No emails provided.");
@@ -32,20 +34,64 @@ async function handleGenerateReport(payload) {
 
   console.log("[Calendar-Analytics] Using config:", config);
   console.log("[Calendar-Analytics] Fetching events for:", emails);
+  console.log("[Calendar-Analytics] Date range (label):", dateRange);
+  console.log("[Calendar-Analytics] Selected dates:", selectedDates);
 
-  const { events, failures } = await fetchEventsForUsers(
-    emails,
-    dateRange,
-    token
-  );
+  let allEvents = [];
+  let allFailures = [];
 
-  console.log("[Calendar-Analytics] Total events fetched:", events.length);
-  console.log("[Calendar-Analytics] Failures:", failures);
+  // 🔹 NUEVA LÓGICA:
+  // Si tenemos selectedDates, SOLO pedimos esos días, uno por uno.
+  if (Array.isArray(selectedDates) && selectedDates.length > 0) {
+    for (const dateStr of selectedDates) {
+      const dayStart = new Date(`${dateStr}T00:00:00`);
+      const dayEnd = new Date(`${dateStr}T23:59:59`);
 
-  const analysis = analyzeCalendar(events, config);
+      const dayRange = {
+        start: dayStart.toISOString(),
+        end: dayEnd.toISOString()
+      };
+
+      console.log(
+        "[Calendar-Analytics] Fetching day:",
+        dateStr,
+        "range:",
+        dayRange
+      );
+
+      const { events, failures } = await fetchEventsForUsers(
+        emails,
+        dayRange,
+        token
+      );
+
+      allEvents = allEvents.concat(events);
+      allFailures = allFailures.concat(failures);
+    }
+  } else {
+    // 🔹 Modo retrocompatible: si no hay selectedDates, usamos dateRange tal cual
+    const { events, failures } = await fetchEventsForUsers(
+      emails,
+      dateRange,
+      token
+    );
+
+    allEvents = events;
+    allFailures = failures;
+  }
+
+  console.log("[Calendar-Analytics] Total events fetched:", allEvents.length);
+  console.log("[Calendar-Analytics] Failures:", allFailures);
+
+  // Aquí ya SOLO hay eventos de los días deseados
+  const analysis = analyzeCalendar(allEvents, config);
   console.log("[Calendar-Analytics] Analysis result:", analysis);
 
-  await downloadCsvFromAnalysis(analysis, failures, buildFilename(dateRange));
+  await downloadCsvFromAnalysis(
+    analysis,
+    allFailures,
+    buildFilename(dateRange)
+  );
 }
 
 function buildFilename(dateRange) {

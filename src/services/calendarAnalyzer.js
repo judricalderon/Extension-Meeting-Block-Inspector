@@ -69,17 +69,17 @@ function analyzeDayBlocks(events, date, config) {
 
   // Convertir eventos a bloques "busy"
   const busyBlocks = events
-    .filter(ev => !ev.allDay) // ignoramos all-day por simplicidad, puedes extenderlo luego
-    .map(ev => ({
+    .filter((ev) => !ev.allDay) // ignoramos all-day por simplicidad, puedes extenderlo luego
+    .map((ev) => ({
       type: "busy",
       title: ev.summary || "",
       start: new Date(ev.start),
       end: new Date(ev.end)
     }))
     // Mantener solo los eventos que intersectan con horario laboral
-    .filter(block => block.end > workStart && block.start < workEnd)
+    .filter((block) => block.end > workStart && block.start < workEnd)
     // Recortar a los límites del horario laboral
-    .map(block => ({
+    .map((block) => ({
       ...block,
       start: new Date(Math.max(block.start, workStart)),
       end: new Date(Math.min(block.end, workEnd))

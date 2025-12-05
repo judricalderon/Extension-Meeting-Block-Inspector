@@ -34,24 +34,40 @@
       <p id="csvInfo" class="status"></p>
     </section>
 
-    <!-- Step 3: Date range -->
+    <!-- Step 3: Date -->
     <section class="section">
-      <h2>3. Date range</h2>
+      <h2>3. Date</h2>
+      <p class="help">
+        Select the main day you want to generate the report for.
+      </p>
+
       <div class="range-options">
         <label>
-          <input type="radio" name="range" value="today" checked />
-          Today
-        </label>
-        <label>
-          <input type="radio" name="range" value="tomorrow" />
-          Tomorrow
-        </label>
-        <label>
-          <input type="radio" name="range" value="week" />
-          This week
+          Main date:
+          <input type="date" id="reportDate" />
         </label>
       </div>
+
+      <div class="range-options" style="margin-top: 8px;">
+        <label>
+          <input type="checkbox" id="customSecondDay" />
+          Use a custom second day (e.g. holiday)
+        </label>
+      </div>
+
+      <div class="range-options" style="margin-top: 4px;">
+        <label>
+          Second date:
+          <input type="date" id="secondDate" />
+        </label>
+        <p class="help">
+          If not checked, the second day is calculated automatically
+          (next workday, Friday → Monday).
+        </p>
+      </div>
     </section>
+
+
 
     <!-- Generate -->
     <section class="section section-last">

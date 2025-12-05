@@ -12,7 +12,14 @@ const csvInfoEl = document.getElementById("csvInfo");
 const generateBtn = document.getElementById("generateBtn");
 const generateStatusEl = document.getElementById("generateStatus");
 
+// Nuevos elementos para manejo de 2 días
+const reportDateInput = document.getElementById("reportDate");       // día principal
+const customSecondDayCheckbox = document.getElementById("customSecondDay"); // checkbox festivo / custom
+const secondDateInput = document.getElementById("secondDate");       // segundo día manual (opcional)
+
 function updateGenerateButtonState() {
+  // De momento el botón depende solo de: CSV + auth.
+  // Validaciones de fecha se hacen al hacer click.
   const canGenerate = emailsFromCsv.length > 0 && isAuthenticated;
   generateBtn.disabled = !canGenerate;
 }
@@ -29,6 +36,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (e) {
     console.error("Error checking token", e);
   }
+
+  // Set default date: today para el día principal
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  if (reportDateInput) reportDateInput.value = todayStr;
+
   updateGenerateButtonState();
 });
 
@@ -126,45 +143,116 @@ function parseEmailsFromCsvText(text) {
   return unique;
 }
 
-function getSelectedDateRange() {
-  const checked = document.querySelector('input[name="range"]:checked');
-  const value = checked ? checked.value : "today";
+/**
+ * Construye:
+ *  - selectedDates: ["YYYY-MM-DD", "YYYY-MM-DD"]
+ *  - dateRange: { label, start, end } con min/max de esas fechas
+ *
+ * Regresa { error } si algo está mal.
+ */
+function buildDateSelectionPayload() {
+  const mainValue = reportDateInput?.value;
 
-  const now = new Date();
-
-  if (value === "today") {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    return { label: "today", start: start.toISOString(), end: end.toISOString() };
+  if (!mainValue) {
+    return { error: "Please select the main date." };
   }
 
-  if (value === "tomorrow") {
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    const start = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0);
-    const end = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59);
-    return { label: "tomorrow", start: start.toISOString(), end: end.toISOString() };
+  const mainDate = new Date(mainValue + "T00:00:00");
+  if (isNaN(mainDate.getTime())) {
+    return { error: "Invalid main date." };
   }
 
-  // this week: from Monday to Sunday of current week
-  const day = now.getDay(); // 0 (Sun) - 6 (Sat)
-  const diffToMonday = (day === 0 ? -6 : 1) - day;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + diffToMonday);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  let secondDateStr;
+  let secondDateObj;
 
-  const start = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate(), 0, 0, 0);
-  const end = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59);
+  // ¿Usar segundo día personalizado (festivo, etc.)?
+  const useCustomSecond =
+    !!customSecondDayCheckbox && customSecondDayCheckbox.checked;
 
-  return { label: "week", start: start.toISOString(), end: end.toISOString() };
+  if (useCustomSecond) {
+    const secondValue = secondDateInput?.value;
+    if (!secondValue) {
+      return { error: "Please select the second date." };
+    }
+
+    const parsedSecond = new Date(secondValue + "T00:00:00");
+    if (isNaN(parsedSecond.getTime())) {
+      return { error: "Invalid second date." };
+    }
+
+    secondDateStr = secondValue;
+    secondDateObj = parsedSecond;
+  } else {
+    // Lógica automática:
+    // - Lunes a jueves → siguiente día
+    // - Viernes → lunes (sumar 3 días)
+    const weekday = mainDate.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+    const autoSecond = new Date(mainDate);
+
+    if (weekday === 5) {
+      // Viernes → +3 días (lunes)
+      autoSecond.setDate(autoSecond.getDate() + 3);
+    } else {
+      // Cualquier otro día → +1 día
+      autoSecond.setDate(autoSecond.getDate() + 1);
+    }
+
+    secondDateObj = autoSecond;
+
+    const yyyy = secondDateObj.getFullYear();
+    const mm = String(secondDateObj.getMonth() + 1).padStart(2, "0");
+    const dd = String(secondDateObj.getDate()).padStart(2, "0");
+    secondDateStr = `${yyyy}-${mm}-${dd}`;
+  }
+
+  const mainDateStr = mainValue;
+  const selectedDates = [mainDateStr, secondDateStr];
+
+  // Determinar min/max para construir dateRange
+  const firstTime = mainDate.getTime();
+  const secondTime = secondDateObj.getTime();
+
+  const minTime = Math.min(firstTime, secondTime);
+  const maxTime = Math.max(firstTime, secondTime);
+
+  const minDateObj = new Date(minTime);
+  const maxDateObj = new Date(maxTime);
+
+  const rangeStart = new Date(
+    minDateObj.getFullYear(),
+    minDateObj.getMonth(),
+    minDateObj.getDate(),
+    0,
+    0,
+    0
+  );
+  const rangeEnd = new Date(
+    maxDateObj.getFullYear(),
+    maxDateObj.getMonth(),
+    maxDateObj.getDate(),
+    23,
+    59,
+    59
+  );
+
+  const label = `${mainDateStr}__${secondDateStr}`;
+
+  return {
+    selectedDates,
+    dateRange: {
+      label,
+      start: rangeStart.toISOString(),
+      end: rangeEnd.toISOString()
+    }
+  };
 }
 
 generateBtn.addEventListener("click", () => {
   generateStatusEl.textContent = "";
 
   if (emailsFromCsv.length === 0) {
-    generateStatusEl.textContent = "Please upload a CSV file with at least one email.";
+    generateStatusEl.textContent =
+      "Please upload a CSV file with at least one email.";
     generateStatusEl.style.color = "#f97316";
     return;
   }
@@ -175,7 +263,15 @@ generateBtn.addEventListener("click", () => {
     return;
   }
 
-  const range = getSelectedDateRange();
+  const datePayload = buildDateSelectionPayload();
+
+  if (datePayload.error) {
+    generateStatusEl.textContent = datePayload.error;
+    generateStatusEl.style.color = "#f97316";
+    return;
+  }
+
+  const { dateRange, selectedDates } = datePayload;
 
   generateBtn.disabled = true;
   generateStatusEl.textContent = "Generating report...";
@@ -186,7 +282,8 @@ generateBtn.addEventListener("click", () => {
       type: "GENERATE_REPORT",
       payload: {
         emails: emailsFromCsv,
-        dateRange: range
+        dateRange,
+        selectedDates
       }
     },
     (response) => {
@@ -204,7 +301,8 @@ generateBtn.addEventListener("click", () => {
         return;
       }
 
-      generateStatusEl.textContent = "Report generated. Your CSV download should start soon.";
+      generateStatusEl.textContent =
+        "Report generated. Your CSV download should start soon.";
       generateStatusEl.style.color = "#22c55e";
     }
   );
