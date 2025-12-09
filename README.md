@@ -156,7 +156,7 @@ To use your own Google Cloud Project:
 - Create an OAuth Client (type: Web Application).
 
 - Add your Chrome extension redirect URL:
-    chrome-extension://<EXTENSION_ID>/
+    URL = https://<extension-id>.chromiumapp.org/
 
 - Copy your client ID.
 
@@ -364,7 +364,7 @@ Para usar tu propio proyecto de Google Cloud:
 - Crear un cliente OAuth tipo “Web Application”.
 
 - Agregar la URL de redirección de la extensión:
-    chrome-extension://<EXTENSION_ID>/
+    URL = https://<extension-id>.chromiumapp.org/
 
 - Copiar el Client ID.
 
