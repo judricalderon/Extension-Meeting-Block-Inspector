@@ -61,12 +61,17 @@ button {
   color: #f9fafb;
 }
 
-#generateBtn {
+#generateBtn #criteriaBtn{
   background: #10b981;
   color: #022c22;
 }
 
 #generateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#criteriaBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
