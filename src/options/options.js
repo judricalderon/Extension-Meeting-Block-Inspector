@@ -1,4 +1,16 @@
 // src/options/options.js
+
+/**
+ * Options Page Logic for Calendar-Analytics Extension
+ *
+ * This script:
+ * - Loads the saved configuration into the settings form
+ * - Saves user updates back into storage
+ * - Resets configuration to default values
+ *
+ * The UI is defined in options.html and styled by options.css.
+ * Storage operations are handled through ../storage/storage.js.
+ */
 import { getConfig, saveConfig, resetConfig } from "../storage/storage.js";
 
 const workdayStartInput = document.getElementById("workdayStart");
@@ -11,6 +23,12 @@ const saveBtn = document.getElementById("saveBtn");
 const resetBtn = document.getElementById("resetBtn");
 const statusEl = document.getElementById("status");
 
+/**
+ * Loads the saved configuration values into the form fields.
+ * Called on DOMContentLoaded.
+ *
+ * @returns {Promise<void>}
+ */
 async function loadConfigIntoForm() {
   const config = await getConfig();
 
@@ -21,7 +39,12 @@ async function loadConfigIntoForm() {
   googleClientIdInput.value = config.googleClientId || "";
   statusEl.textContent = "Settings loaded.";
 }
-
+/**
+ * Handles saving user-defined configuration values.
+ * Values are validated and falls back to defaults when needed.
+ *
+ * @returns {Promise<void>}
+ */
 async function handleSave() {
   const updates = {
     workdayStart: workdayStartInput.value || "07:00",
@@ -35,7 +58,11 @@ async function handleSave() {
   statusEl.textContent = "Settings saved.";
   setTimeout(() => (statusEl.textContent = ""), 2000);
 }
-
+/**
+ * Restores default configuration values and updates the form accordingly.
+ *
+ * @returns {Promise<void>}
+ */
 async function handleReset() {
   const newConfig = await resetConfig();
   workdayStartInput.value = newConfig.workdayStart;

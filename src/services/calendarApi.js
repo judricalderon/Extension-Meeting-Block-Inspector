@@ -1,12 +1,28 @@
+/**
+ * Calendar API Service
+ *
+ * This module wraps calls to the Google Calendar v3 API and exposes
+ * higher-level helpers to:
+ * - Fetch events for a single calendar.
+ * - Fetch events for multiple calendars in parallel.
+ * - Normalize raw Google Calendar events into a unified internal shape.
+ */
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
 /**
- * Fetch events for a single calendar (email) within a given date range.
+ * Fetches events for a single calendar (usually a user email) within
+ * a given date range.
  *
- * @param {string} calendarId - Usually the user email (e.g. user@company.com)
- * @param {{ start: string, end: string }} dateRange - ISO strings
- * @param {string} accessToken - Google OAuth access token
- * @returns {Promise<Array<Object>>} Normalized events
+ * The function:
+ * - Calls the Google Calendar Events list endpoint.
+ * - Handles pagination via nextPageToken.
+ * - Filters out cancelled events.
+ * - Normalizes the remaining events for downstream processing.
+ *
+ * @param {string} calendarId - Calendar identifier, usually a user email (e.g. user@company.com).
+ * @param {{ start: string, end: string }} dateRange - Date range with ISO strings for timeMin/timeMax.
+ * @param {string} accessToken - Google OAuth access token.
+ * @returns {Promise<Array<Object>>} A list of normalized events.
  */
 export async function fetchEventsForUser(calendarId, dateRange, accessToken) {
   console.log("[Calendar-Analytics] fetchEventsForUser →", calendarId);
@@ -42,15 +58,25 @@ export async function fetchEventsForUser(calendarId, dateRange, accessToken) {
 }
 
 /**
- * Fetch events for multiple calendars in parallel.
- * Devuelve:
- *  - events: todos los eventos de los calendarios que sí se pudieron leer
- *  - failures: lista de calendarios que fallaron
+ * Fetches events for multiple calendars in parallel.
  *
- * @param {string[]} calendarIds
- * @param {{ start: string, end: string }} dateRange
- * @param {string} accessToken
- * @returns {Promise<{ events: Array<Object>, failures: Array<Object> }>}
+ * For each calendar ID:
+ * - Attempts to fetch events using fetchEventsForUser.
+ * - On failure, records a structured failure entry and continues.
+ *
+ * The returned object contains:
+ * - events: All events from calendars that were successfully read.
+ * - failures: A list of calendar IDs that could not be read, with a reason and message.
+ *
+ * @param {string[]} calendarIds - List of calendar IDs (usually user emails).
+ * @param {{ start: string, end: string }} dateRange - Date range with ISO strings.
+ * @param {string} accessToken - Google OAuth access token.
+ * @returns {Promise<{ events: Array<Object>, failures: Array<{
+ *   calendarId: string;
+ *   status: number | null;
+ *   reason: "not_found_or_no_access" | "forbidden" | "other_error";
+ *   message: string;
+ * }> }>}
  */
 export async function fetchEventsForUsers(calendarIds, dateRange, accessToken) {
   console.log("[Calendar-Analytics] fetchEventsForUsers →", calendarIds);
@@ -88,8 +114,20 @@ export async function fetchEventsForUsers(calendarIds, dateRange, accessToken) {
 }
 
 /**
- * Perform an authenticated GET request and parse JSON.
- * En 404/403 lanzamos error con status para poder registrar la falla.
+ * Performs an authenticated GET request and parses the JSON response.
+ *
+ * If the response is not OK (non-2xx):
+ * - Logs the response body for debugging.
+ * - Throws an Error object enriched with:
+ *   - status: HTTP status code
+ *   - body: raw response body text
+ *
+ * This allows callers to distinguish 403/404 errors when tracking failures.
+ *
+ * @param {string} url - Fully resolved URL for the Calendar API endpoint.
+ * @param {string} accessToken - Google OAuth access token.
+ * @returns {Promise<any>} Parsed JSON response.
+ * @throws {Error} When the HTTP response is not successful.
  */
 async function fetchJsonWithAuth(url, accessToken) {
   console.log("[Calendar-Analytics] API call →", url);
@@ -118,12 +156,25 @@ async function fetchJsonWithAuth(url, accessToken) {
 }
 
 /**
- * Normalizes a Google Calendar event into the shape we want to use
- * in the analyzer.
+ * Normalizes a raw Google Calendar event into the shape used by the analyzer.
  *
- * @param {Object} ev - Raw Google event
- * @param {string} calendarId
- * @returns {Object} Normalized event
+ * Normalization rules:
+ * - Uses `dateTime` when present, otherwise falls back to `date` (all-day events).
+ * - Derives an `allDay` boolean based on the presence of `date` vs `dateTime`.
+ * - Preserves the original event object in the `raw` property for debugging or extensions.
+ *
+ * @param {Object} ev - Raw Google Calendar event object.
+ * @param {string} calendarId - The calendar ID from which this event was fetched.
+ * @returns {{
+ *   calendarId: string;
+ *   eventId: string;
+ *   summary: string;
+ *   description: string;
+ *   start: string | null;
+ *   end: string | null;
+ *   allDay: boolean;
+ *   raw: Object;
+ * }} Normalized event object.
  */
 function normalizeEvent(ev, calendarId) {
   const startObj = ev.start || {};
@@ -143,6 +194,6 @@ function normalizeEvent(ev, calendarId) {
     start, // ISO string
     end,   // ISO string
     allDay,
-    raw: ev // original event (optional)
+    raw: ev
   };
 }

@@ -1,5 +1,19 @@
 /* src/popup/popup.css */
+/* 
+  popup.css – Styles for the Calendar-Analytics popup UI
 
+  This stylesheet defines the visual layout, typography, and
+  interactive components of the browser extension popup.
+
+  Key UI elements styled here include:
+  - Container and layout structure
+  - Section cards with dark theme styling
+  - Buttons for OAuth login and report generation
+  - Status messages and helper text
+  - Date range option controls
+
+  The design follows a dark, compact interface suitable for browser popups.
+*/
 body {
   margin: 0;
   padding: 0;

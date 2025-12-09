@@ -1,3 +1,15 @@
+/**
+ * Stylesheet for the extension's options/settings UI.
+ *
+ * This file defines:
+ * - Global layout and typography
+ * - Section containers with dark theme styling
+ * - Form inputs and labels
+ * - Buttons for saving/resetting configuration
+ * - Status message styling
+ *
+ * The design follows a dark UI aesthetic inspired by Tailwind-like palettes.
+ */
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   padding: 16px;

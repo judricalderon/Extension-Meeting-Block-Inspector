@@ -1,5 +1,16 @@
 // src/popup/popup.js
-
+/**
+ * Popup Script for Calendar-Analytics Extension
+ *
+ * Responsibilities:
+ * - Handle Google OAuth authentication from the popup.
+ * - Parse and validate a CSV file containing user email addresses.
+ * - Manage date selection for one or two report days.
+ * - Enable/disable report generation buttons based on state.
+ * - Send messages to the background script to trigger CSV report generation.
+ *
+ * UI elements are defined in popup.html and styled via popup.css.
+ */
 import { authenticateUser, hasValidToken } from "../services/googleAuth.js";
 
 let emailsFromCsv = [];
@@ -13,13 +24,14 @@ const generateBtn = document.getElementById("generateBtn");
 const generateStatusEl = document.getElementById("generateStatus");
 const criteriaBtn = document.getElementById("criteriaBtn");
 
-// Nuevos elementos para manejo de 2 días
-const reportDateInput = document.getElementById("reportDate");       // día principal
-const customSecondDayCheckbox = document.getElementById("customSecondDay"); // checkbox festivo / custom
-const secondDateInput = document.getElementById("secondDate");       // segundo día manual (opcional)
-
+const reportDateInput = document.getElementById("reportDate");      
+const customSecondDayCheckbox = document.getElementById("customSecondDay"); 
+const secondDateInput = document.getElementById("secondDate");       
+/**
+ * Updates the enabled/disabled state of the report buttons
+ * based on authentication status and CSV upload state.
+ */
 function updateGenerateButtonState() {
-  // Depende de: CSV + auth
   const canGenerate = emailsFromCsv.length > 0 && isAuthenticated;
   generateBtn.disabled = !canGenerate;
   if (criteriaBtn) criteriaBtn.disabled = !canGenerate;
@@ -105,8 +117,14 @@ csvInput.addEventListener("change", () => {
 });
 
 /**
- * Very simple CSV parser for a single "email" column.
- * - Supports a header row containing "email" (case-insensitive) OR no header (one email per line).
+ * Parses email addresses from a CSV text input.
+ *
+ * Supported formats:
+ * - A header row containing an "email" column (case-insensitive).
+ * - A file without headers, where each non-empty line is a single email.
+ *
+ * @param {string} text - Raw CSV file content.
+ * @returns {string[]} A de-duplicated list of email addresses.
  */
 function parseEmailsFromCsvText(text) {
   const lines = text
@@ -145,11 +163,22 @@ function parseEmailsFromCsvText(text) {
 }
 
 /**
- * Construye:
- *  - selectedDates: ["YYYY-MM-DD", "YYYY-MM-DD"]
- *  - dateRange: { label, start, end } con min/max de esas fechas
+ * Builds the date payload used when requesting reports from the background script.
  *
- * Regresa { error } si algo está mal.
+ * Returns:
+ * - selectedDates: an array of two dates in "YYYY-MM-DD" format.
+ * - dateRange: an object containing:
+ *    - label: a string representing the pair of dates (e.g., "2025-01-01__2025-01-02")
+ *    - start: ISO string marking the start of the earliest date at 00:00:00
+ *    - end: ISO string marking the end of the latest date at 23:59:59
+ *
+ * If validation fails, returns an object with an `error` property.
+ *
+ * @returns {{
+ *   selectedDates?: string[],
+ *   dateRange?: { label: string; start: string; end: string },
+ *   error?: string
+ * }}
  */
 function buildDateSelectionPayload() {
   const mainValue = reportDateInput?.value;
@@ -166,7 +195,6 @@ function buildDateSelectionPayload() {
   let secondDateStr;
   let secondDateObj;
 
-  // ¿Usar segundo día personalizado (festivo, etc.)?
   const useCustomSecond =
     !!customSecondDayCheckbox && customSecondDayCheckbox.checked;
 
@@ -185,16 +213,16 @@ function buildDateSelectionPayload() {
     secondDateObj = parsedSecond;
   } else {
     // Lógica automática:
-    // - Lunes a jueves → siguiente día
-    // - Viernes → lunes (sumar 3 días)
-    const weekday = mainDate.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+    // - Lunes a jueves = siguiente día
+    // - Viernes y lunes (sumar 3 días)
+    const weekday = mainDate.getDay();
     const autoSecond = new Date(mainDate);
 
     if (weekday === 5) {
-      // Viernes → +3 días (lunes)
+      // Viernes = +3 días (lunes)
       autoSecond.setDate(autoSecond.getDate() + 3);
     } else {
-      // Cualquier otro día → +1 día
+      // Cualquier otro día = +1 día
       autoSecond.setDate(autoSecond.getDate() + 1);
     }
 

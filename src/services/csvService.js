@@ -1,10 +1,47 @@
+// src/services/csvService.js
 /**
- * Construye el texto CSV a partir del análisis del calendario
- * y la lista de calendarios que fallaron.
+ * CSV Service for Calendar-Analytics
  *
- * @param {Array} analysis - salida de analyzeCalendar()
- * @param {Array} failures - [{ calendarId, status, reason, message }]
- * @returns {string} CSV text
+ * This module is responsible for:
+ * - Converting calendar analysis results into CSV text.
+ * - Including error rows for calendars that could not be read.
+ * - Triggering CSV downloads using data URLs (MV3-compatible).
+ * - Generating a criteria-based CSV report and associated Slack messages.
+ */
+
+/**
+ * Builds the CSV text from the calendar analysis output and the list of
+ * calendars that failed to be read.
+ *
+ * The generated CSV has the following columns:
+ * - email: calendar owner identifier (usually user email)
+ * - date: day in YYYY-MM-DD format
+ * - type: "busy", "free", or "error"
+ * - title: event title or error description
+ * - from: start time of the block (HH:MM)
+ * - to: end time of the block (HH:MM)
+ * - duration_minutes: block duration in minutes
+ * - is_long: "true" if the busy block exceeds the configured threshold, otherwise empty
+ *
+ * @param {Array<{
+ *   email: string;
+ *   date: string;
+ *   blocks: Array<{
+ *     type: "busy" | "free";
+ *     title?: string;
+ *     from: string;
+ *     to: string;
+ *     duration: number;
+ *     isLong?: boolean;
+ *   }>;
+ * }>} analysis - Output of analyzeCalendar(), grouped by user and day.
+ * @param {Array<{
+ *   calendarId: string;
+ *   status?: number | null;
+ *   reason?: string;
+ *   message?: string;
+ * }>} [failures=[]] - List of calendars that could not be read.
+ * @returns {string} CSV text representation of the analysis and failures.
  */
 export function buildCsvFromAnalysis(analysis, failures = []) {
   const header = [
@@ -74,7 +111,13 @@ export function buildCsvFromAnalysis(analysis, failures = []) {
 }
 
 /**
- * Dispara la descarga del CSV usando un data URL (compatible con MV3).
+ * Triggers a CSV download built from the analysis and failures using a data URL.
+ * This approach is compatible with Manifest V3 in Chrome extensions.
+ *
+ * @param {Array} analysis - Output of analyzeCalendar().
+ * @param {Array} [failures=[]] - List of calendars that could not be read.
+ * @param {string} [filename="calendar-report.csv"] - Desired filename for the download.
+ * @returns {Promise<number>} A promise that resolves with the Chrome download ID.
  */
 export function downloadCsvFromAnalysis(
   analysis,
@@ -107,6 +150,14 @@ export function downloadCsvFromAnalysis(
   });
 }
 
+/**
+ * Escapes a single CSV field value.
+ * - Wraps the value in double quotes if it contains quotes, commas or newlines.
+ * - Doubles internal quotes when quoted.
+ *
+ * @param {any} value - Value to be encoded as a CSV field.
+ * @returns {string} Escaped CSV-safe field string.
+ */
 function escapeCsvField(value) {
   if (value == null) return "";
   const str = String(value);
@@ -117,7 +168,41 @@ function escapeCsvField(value) {
 }
 
 // ----------------- CRITERIA REPORT -----------------
-
+/**
+ * Builds the criteria-based CSV report.
+ *
+ * The resulting CSV has the following columns:
+ * - email: calendar owner identifier.
+ * - passed: "true", "false", or "error".
+ * - criteria_passed: human-readable description of passed criteria.
+ * - criteria_failed: human-readable description of failed criteria.
+ * - slack_message: pre-built Slack message text, based on which criteria passed/failed.
+ * - day1: first date used in the criteria evaluation (YYYY-MM-DD).
+ * - day2: second date used in the criteria evaluation (YYYY-MM-DD).
+ *
+ * Criteria (assuming a 9-hour workday = 540 minutes):
+ *  1) No busy blocks longer than `maxStandardBlockMinutes` (default 60).
+ *  2) Day with lower availability (day1) must have <= 30% availability.
+ *  3) Day with higher availability (day2) must have <= 70% availability.
+ *
+ * @param {Array<{
+ *   email: string;
+ *   date: string;
+ *   blocks: Array<{
+ *     type: "busy" | "free";
+ *     duration: number;
+ *   }>;
+ * }>} analysis - Calendar analysis grouped by user and date.
+ * @param {Array<{
+ *   calendarId: string;
+ *   status?: number | null;
+ *   reason?: string;
+ *   message?: string;
+ * }>} [failures=[]] - Calendars that could not be read.
+ * @param {string[]} [selectedDates=[]] - Array of two dates (YYYY-MM-DD) used as reference.
+ * @param {{ maxStandardBlockMinutes?: number }} [config={}] - Configuration with the maximum standard block length.
+ * @returns {string} CSV text representing the criteria evaluation.
+ */
 export function buildCriteriaCsv(
   analysis,
   failures = [],
@@ -137,10 +222,9 @@ export function buildCriteriaCsv(
   const rows = [header];
 
   if (!Array.isArray(analysis) || analysis.length === 0) {
-    // igual podemos registrar solo los failures
   }
 
-  // Ordenar días: menor → day1 (30%), mayor → day2 (70%)
+  // Ordenar días: menor a day1 (30%), mayor a day2 (70%)
   const datesSorted =
     Array.isArray(selectedDates) && selectedDates.length === 2
       ? [...selectedDates].sort()
@@ -149,7 +233,7 @@ export function buildCriteriaCsv(
   const day1 = datesSorted[0];
   const day2 = datesSorted[1];
 
-  const TOTAL_MIN = 540; // 9 horas * 60
+  const TOTAL_MIN = 540; // 9 horas * 60 incluye hora de almuerzo
   const maxBlock = config?.maxStandardBlockMinutes || 60;
 
   // Agrupar analysis por email
@@ -242,6 +326,13 @@ export function buildCriteriaCsv(
     .join("\n");
 }
 
+/**
+ * Sums the total busy minutes for a given date within a list of analysis entries.
+ *
+ * @param {Array<{ date: string; blocks: Array<{ type: string; duration: number }> }>} entries
+ * @param {string | null} dateStr - Target date in YYYY-MM-DD format.
+ * @returns {number} Total busy time in minutes.
+ */
 function sumBusyMinutesForDate(entries, dateStr) {
   if (!dateStr) return 0;
   const dayEntry = entries.find((e) => e.date === dateStr);
@@ -252,6 +343,13 @@ function sumBusyMinutesForDate(entries, dateStr) {
     .reduce((acc, b) => acc + (b.duration || 0), 0);
 }
 
+/**
+ * Checks whether any busy block across all entries exceeds the maximum duration.
+ *
+ * @param {Array<{ blocks: Array<{ type: string; duration?: number }> }>} entries
+ * @param {number} maxBlock - Maximum allowed block duration in minutes.
+ * @returns {boolean} True if at least one block is longer than maxBlock.
+ */
 function checkHasLongBlocks(entries, maxBlock) {
   for (const e of entries) {
     if (!Array.isArray(e.blocks)) continue;
@@ -264,8 +362,18 @@ function checkHasLongBlocks(entries, maxBlock) {
   return false;
 }
 
+/**
+ * Builds a Slack message in Spanish based on which criteria passed or failed.
+ *
+ * The message is intended for direct communication with users,
+ * explaining what needs to be adjusted in their calendar.
+ *
+ * @param {boolean} c1 - Criteria 1 (maximum block length) passed.
+ * @param {boolean} c2 - Criteria 2 (day 1 availability) passed.
+ * @param {boolean} c3 - Criteria 3 (day 2 availability) passed.
+ * @returns {string} A Slack-ready message.
+ */
 function buildSlackMessage(c1, c2, c3) {
-  // Cadenas según los casos que me diste
   if (c1 && c2 && c3) {
     return (
       "hola, muchas gracias por mantener tu calendario actualizado y dentro de los criterios establecidos.\n" +
@@ -305,6 +413,16 @@ function buildSlackMessage(c1, c2, c3) {
   return "hola, " + parts.join(" y ") + "\nmuchas gracias !";
 }
 
+/**
+ * Triggers a CSV download for the criteria report using a data URL.
+ *
+ * @param {Array} analysis - Calendar analysis data.
+ * @param {Array} [failures=[]] - Calendars that could not be read.
+ * @param {string[]} [selectedDates=[]] - Dates used to evaluate criteria.
+ * @param {{ maxStandardBlockMinutes?: number }} [config={}] - Criteria configuration.
+ * @param {string} [filename="calendar-criteria-report.csv"] - Desired filename.
+ * @returns {Promise<number>} A promise that resolves with the Chrome download ID.
+ */
 export function downloadCriteriaCsv(
   analysis,
   failures = [],
