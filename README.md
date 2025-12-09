@@ -36,7 +36,7 @@
   - [Licencia](#licencia)
   - [Autor](#autor)
 
-  
+
 # --------------English--------------
 Google Calendar meeting-block analysis and CSV reporting Chrome Extension
 
@@ -111,7 +111,7 @@ storage.js — Persistent user configuration storage.
 
 ### options/
 Options UI where users configure workday hours and OAuth client ID.
-´´´
+```
 File Structure
 src/
   background/
@@ -132,18 +132,18 @@ src/
   storage/
     storage.js
 manifest.json
-´´´
+```
 ## Configuration
 
 The extension stores user settings in chrome.storage.local.
 Defaults are defined in storage.js:
-´´´
+```
 workdayStart: "07:00"
 workdayEnd: "17:00"
 minBlockMinutes: 30
 maxStandardBlockMinutes: 60
 googleClientId: ""
-´´´
+```
 
 If no Google Client ID is provided, googleAuth.js uses the built-in DEFAULT_CLIENT_ID.
 
@@ -315,7 +315,7 @@ storage.js — Manejo persistente de configuración del usuario.
 Interfaz de configuración avanzada de la extensión.
 
 ## Estructura de archivos
-´´´
+```
 src/
   background/
     background.js
@@ -335,19 +335,19 @@ src/
   storage/
     storage.js
 manifest.json
-´´´
+```
 ## Configuración
 
 La extensión guarda la configuración del usuario en chrome.storage.local.
 Los valores predeterminados se encuentran en storage.js:
 
-´´´
+```
 workdayStart: "07:00"
 workdayEnd: "17:00"
 minBlockMinutes: 30
 maxStandardBlockMinutes: 60
 googleClientId: ""
-´´´
+```
 
 Si no se configura un Client ID, googleAuth.js utiliza un ID predeterminado.
 
