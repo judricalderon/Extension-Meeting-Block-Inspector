@@ -101,14 +101,16 @@ User interface for authentication, CSV upload, date selection, and report genera
 Handles long-running operations, API calls, and CSV download triggers.
 
 ### services/
+```
 googleAuth.js — Google OAuth flow and token management.
 calendarApi.js — Event retrieval and normalization.
 calendarAnalyzer.js — Busy/free block extraction.
 csvService.js — CSV builders and download utilities.
-
+```
 ### storage/
+```
 storage.js — Persistent user configuration storage.
-
+```
 ### options/
 Options UI where users configure workday hours and OAuth client ID.
 ```
@@ -210,10 +212,12 @@ A Slack-optimized message is automatically generated depending on which criteria
 
 ## Permissions Justification
 
+```
 identity — Used for OAuth authentication with Google.
 storage — Used to persist configuration settings.
 downloads — Required to generate CSV downloads.
 scripting and activeTab — Required for MV3 popup and background interactions.
+```
 
 ## Limitations
 
@@ -303,14 +307,16 @@ Interfaz donde el usuario se autentica, carga el CSV y selecciona las fechas par
 Ejecuta tareas de larga duración, llama a la API y dispara la descarga del CSV.
 
 ### services/
+```
 googleAuth.js — Manejo de OAuth y tokens.
 calendarApi.js — Obtención y normalización de eventos.
 calendarAnalyzer.js — Conversión a bloques libres/ocupados.
 csvService.js — Construcción y descarga de archivos CSV.
-
+```
 ### storage/
+```
 storage.js — Manejo persistente de configuración del usuario.
-
+```
 ### options/
 Interfaz de configuración avanzada de la extensión.
 
@@ -413,12 +419,12 @@ También se genera un mensaje preparado para Slack según el desempeño del usua
 4. Elegir la carpeta que contiene manifest.json.
 
 ## Permisos utilizados
-
+```
 identity — Requerido para autenticación OAuth.
 storage — Para guardar la configuración del usuario.
 downloads — Para generar y descargar archivos CSV.
 scripting y activeTab — Utilizados por el popup y el servicio de fondo.
-
+```
 ## Limitaciones
 
 Solo se analizan los calendarios accesibles por el usuario autenticado.
