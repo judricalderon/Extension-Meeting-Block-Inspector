@@ -108,7 +108,7 @@ export function downloadCsvFromAnalysis(
 /**
  * Criteria:
  *  1) No busy blocks longer than maxStandardBlockMinutes (default 60).
- *  2) Busy percentage for the selected day must be >= 70%.
+ *  2) Busy percentage for the selected day must be >= 85%.
  *
  * Notes:
  * - We evaluate ONE selected date only.
@@ -170,8 +170,8 @@ export function buildCriteriaCsv(
       : false;
     const c1 = !hasLongBlocks;
 
-    // C2: busy >= 70%
-    const c2 = busyPercent >= 70;
+    // C2: busy >= 85%
+    const c2 = busyPercent >= 85;
 
     const passed = c1 && c2;
 
@@ -181,8 +181,8 @@ export function buildCriteriaCsv(
     if (c1) ok.push(`Bloques <= ${maxBlock} min`);
     else fail.push(`Bloques > ${maxBlock} min`);
 
-    if (c2) ok.push("Busy >= 70%");
-    else fail.push("Busy < 70%");
+    if (c2) ok.push("Busy >= 85%");
+    else fail.push("Busy < 85%");
 
     rows.push([
       email,
@@ -295,7 +295,7 @@ function buildSlackMessageOneDay({ c1, c2, maxBlock }) {
 
   if (!c2) {
     parts.push(
-      "veo que tu calendario tiene menos del 70% ocupado, porfa agrega las actividades que tengas"
+      "veo que tu calendario tiene unos espacios vacios, porfa agrega las actividades que tengas"
     );
   }
 
