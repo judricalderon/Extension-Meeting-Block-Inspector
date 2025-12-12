@@ -3,41 +3,64 @@
  * Popup Script for Calendar-Analytics Extension
  *
  * Responsibilities:
- * - Handle Google OAuth authentication from the popup.
+ * - Authenticate the user with Google (OAuth) to access Calendar data.
  * - Parse and validate a CSV file containing user email addresses.
- * - Manage date selection for one or two report days.
- * - Enable/disable report generation buttons based on state.
- * - Send messages to the background script to trigger CSV report generation.
+ * - Manage a single-day date selection for reports.
+ * - Enable/disable report generation buttons based on state (auth + CSV).
+ * - Send messages to the background script to trigger:
+ *    - Standard CSV report
+ *    - Criteria-based CSV report
  *
  * UI elements are defined in popup.html and styled via popup.css.
  */
+
 import { authenticateUser, hasValidToken } from "../services/googleAuth.js";
 
+/** -------------------- STATE -------------------- **/
 let emailsFromCsv = [];
 let isAuthenticated = false;
 
+/** -------------------- DOM ELEMENTS -------------------- **/
 const connectBtn = document.getElementById("connectBtn");
 const authStatusEl = document.getElementById("authStatus");
+
 const csvInput = document.getElementById("csvInput");
 const csvInfoEl = document.getElementById("csvInfo");
-const generateBtn = document.getElementById("generateBtn");
-const generateStatusEl = document.getElementById("generateStatus");
-const criteriaBtn = document.getElementById("criteriaBtn");
 
-const reportDateInput = document.getElementById("reportDate");      
-const customSecondDayCheckbox = document.getElementById("customSecondDay"); 
-const secondDateInput = document.getElementById("secondDate");       
+const reportDateInput = document.getElementById("reportDate");
+
+const generateBtn = document.getElementById("generateBtn");
+const criteriaBtn = document.getElementById("criteriaBtn");
+const generateStatusEl = document.getElementById("generateStatus");
+
+/** -------------------- UI HELPERS -------------------- **/
 /**
  * Updates the enabled/disabled state of the report buttons
  * based on authentication status and CSV upload state.
  */
 function updateGenerateButtonState() {
-  const canGenerate = emailsFromCsv.length > 0 && isAuthenticated;
+  const canGenerate = isAuthenticated && emailsFromCsv.length > 0;
   generateBtn.disabled = !canGenerate;
   if (criteriaBtn) criteriaBtn.disabled = !canGenerate;
 }
 
-// Al abrir el popup, revisar si ya hay token válido
+/**
+ * Sets a small status message in the popup UI.
+ * @param {string} text
+ * @param {string} color
+ */
+function setStatus(text, color = "#a5b4fc") {
+  generateStatusEl.textContent = text;
+  generateStatusEl.style.color = color;
+}
+
+/** -------------------- INIT -------------------- **/
+/**
+ * On popup open:
+ * - Check if a valid token exists.
+ * - Set the default date input to "today".
+ * - Update button states.
+ */
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     const valid = await hasValidToken();
@@ -47,26 +70,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       authStatusEl.style.color = "#22c55e";
     }
   } catch (e) {
-    console.error("Error checking token", e);
+    console.error("[Calendar-Analytics] Error checking token:", e);
   }
 
-  // Set default date: today para el día principal
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  const todayStr = `${yyyy}-${mm}-${dd}`;
-
-  if (reportDateInput) reportDateInput.value = todayStr;
+  // Default date = today (YYYY-MM-DD)
+  if (reportDateInput) {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    reportDateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
 
   updateGenerateButtonState();
 });
 
-// Botón: Connect with Google
+/** -------------------- AUTH -------------------- **/
+/**
+ * Connect with Google via OAuth.
+ */
 connectBtn.addEventListener("click", async () => {
   try {
-    const token = await authenticateUser();
-    console.log("Got token:", token);
+    await authenticateUser();
     authStatusEl.textContent = "Connected to Google Calendar ✔";
     authStatusEl.style.color = "#22c55e";
     isAuthenticated = true;
@@ -74,16 +99,20 @@ connectBtn.addEventListener("click", async () => {
   } catch (err) {
     authStatusEl.textContent = "Authentication failed.";
     authStatusEl.style.color = "#f87171";
-    console.error(err);
+    console.error("[Calendar-Analytics] Authentication failed:", err);
   }
 });
 
-// Manejo del CSV
+/** -------------------- CSV PARSING -------------------- **/
+/**
+ * Handles CSV upload and extracts a list of emails.
+ */
 csvInput.addEventListener("change", () => {
   const file = csvInput.files?.[0];
+
   emailsFromCsv = [];
   csvInfoEl.textContent = "";
-  generateStatusEl.textContent = "";
+  setStatus("");
 
   if (!file) {
     updateGenerateButtonState();
@@ -91,11 +120,13 @@ csvInput.addEventListener("change", () => {
   }
 
   const reader = new FileReader();
+
   reader.onload = (e) => {
-    const text = e.target.result;
-    const emails = parseEmailsFromCsvText(String(text));
+    const text = String(e.target?.result || "");
+    const emails = parseEmailsFromCsvText(text);
 
     emailsFromCsv = emails;
+
     if (emails.length === 0) {
       csvInfoEl.textContent = "No valid emails found in the CSV file.";
       csvInfoEl.style.color = "#f97316";
@@ -106,6 +137,7 @@ csvInput.addEventListener("change", () => {
 
     updateGenerateButtonState();
   };
+
   reader.onerror = () => {
     emailsFromCsv = [];
     csvInfoEl.textContent = "Error reading CSV file.";
@@ -120,11 +152,11 @@ csvInput.addEventListener("change", () => {
  * Parses email addresses from a CSV text input.
  *
  * Supported formats:
- * - A header row containing an "email" column (case-insensitive).
- * - A file without headers, where each non-empty line is a single email.
+ * - Header-based: a header row with an "email" column (case-insensitive).
+ * - No header: one email per non-empty line.
  *
  * @param {string} text - Raw CSV file content.
- * @returns {string[]} A de-duplicated list of email addresses.
+ * @returns {string[]} De-duplicated list of email addresses.
  */
 function parseEmailsFromCsvText(text) {
   const lines = text
@@ -134,17 +166,14 @@ function parseEmailsFromCsvText(text) {
 
   if (lines.length === 0) return [];
 
-  let emails = [];
-
-  // Detect header
-  const firstLine = lines[0];
-  const firstLineLower = firstLine.toLowerCase();
+  const firstLineLower = lines[0].toLowerCase();
   const hasHeader = firstLineLower.includes("email");
 
-  if (hasHeader) {
-    const headers = firstLine.split(",").map((h) => h.trim().toLowerCase());
-    const emailIndex = headers.indexOf("email");
+  let emails = [];
 
+  if (hasHeader) {
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const emailIndex = headers.indexOf("email");
     if (emailIndex === -1) return [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -153,24 +182,22 @@ function parseEmailsFromCsvText(text) {
       if (email) emails.push(email);
     }
   } else {
-    // No header: assume each line is one email
     emails = lines;
   }
 
-  // Eliminar duplicados
-  const unique = Array.from(new Set(emails));
-  return unique;
+  return Array.from(new Set(emails));
 }
 
+/** -------------------- DATE PAYLOAD (1 DAY) -------------------- **/
 /**
  * Builds the date payload used when requesting reports from the background script.
  *
  * Returns:
- * - selectedDates: an array of two dates in "YYYY-MM-DD" format.
- * - dateRange: an object containing:
- *    - label: a string representing the pair of dates (e.g., "2025-01-01__2025-01-02")
- *    - start: ISO string marking the start of the earliest date at 00:00:00
- *    - end: ISO string marking the end of the latest date at 23:59:59
+ * - selectedDates: ["YYYY-MM-DD"] (single day)
+ * - dateRange:
+ *    - label: "YYYY-MM-DD"
+ *    - start: ISO string at 00:00:00 for that day (local)
+ *    - end: ISO string at 23:59:59 for that day (local)
  *
  * If validation fails, returns an object with an `error` property.
  *
@@ -181,134 +208,81 @@ function parseEmailsFromCsvText(text) {
  * }}
  */
 function buildDateSelectionPayload() {
-  const mainValue = reportDateInput?.value;
+  const value = reportDateInput?.value;
 
-  if (!mainValue) {
-    return { error: "Please select the main date." };
-  }
+  if (!value) return { error: "Please select a date." };
 
-  const mainDate = new Date(mainValue + "T00:00:00");
-  if (isNaN(mainDate.getTime())) {
-    return { error: "Invalid main date." };
-  }
+  const dateObj = new Date(value + "T00:00:00");
+  if (isNaN(dateObj.getTime())) return { error: "Invalid date." };
 
-  let secondDateStr;
-  let secondDateObj;
-
-  const useCustomSecond =
-    !!customSecondDayCheckbox && customSecondDayCheckbox.checked;
-
-  if (useCustomSecond) {
-    const secondValue = secondDateInput?.value;
-    if (!secondValue) {
-      return { error: "Please select the second date." };
-    }
-
-    const parsedSecond = new Date(secondValue + "T00:00:00");
-    if (isNaN(parsedSecond.getTime())) {
-      return { error: "Invalid second date." };
-    }
-
-    secondDateStr = secondValue;
-    secondDateObj = parsedSecond;
-  } else {
-    // Lógica automática:
-    // - Lunes a jueves = siguiente día
-    // - Viernes y lunes (sumar 3 días)
-    const weekday = mainDate.getDay();
-    const autoSecond = new Date(mainDate);
-
-    if (weekday === 5) {
-      // Viernes = +3 días (lunes)
-      autoSecond.setDate(autoSecond.getDate() + 3);
-    } else {
-      // Cualquier otro día = +1 día
-      autoSecond.setDate(autoSecond.getDate() + 1);
-    }
-
-    secondDateObj = autoSecond;
-
-    const yyyy = secondDateObj.getFullYear();
-    const mm = String(secondDateObj.getMonth() + 1).padStart(2, "0");
-    const dd = String(secondDateObj.getDate()).padStart(2, "0");
-    secondDateStr = `${yyyy}-${mm}-${dd}`;
-  }
-
-  const mainDateStr = mainValue;
-  const selectedDates = [mainDateStr, secondDateStr];
-
-  // Determinar min/max para construir dateRange
-  const firstTime = mainDate.getTime();
-  const secondTime = secondDateObj.getTime();
-
-  const minTime = Math.min(firstTime, secondTime);
-  const maxTime = Math.max(firstTime, secondTime);
-
-  const minDateObj = new Date(minTime);
-  const maxDateObj = new Date(maxTime);
-
-  const rangeStart = new Date(
-    minDateObj.getFullYear(),
-    minDateObj.getMonth(),
-    minDateObj.getDate(),
+  const start = new Date(
+    dateObj.getFullYear(),
+    dateObj.getMonth(),
+    dateObj.getDate(),
     0,
     0,
     0
   );
-  const rangeEnd = new Date(
-    maxDateObj.getFullYear(),
-    maxDateObj.getMonth(),
-    maxDateObj.getDate(),
+
+  const end = new Date(
+    dateObj.getFullYear(),
+    dateObj.getMonth(),
+    dateObj.getDate(),
     23,
     59,
     59
   );
 
-  const label = `${mainDateStr}__${secondDateStr}`;
-
   return {
-    selectedDates,
+    selectedDates: [value],
     dateRange: {
-      label,
-      start: rangeStart.toISOString(),
-      end: rangeEnd.toISOString()
+      label: value,
+      start: start.toISOString(),
+      end: end.toISOString()
     }
   };
 }
 
-generateBtn.addEventListener("click", () => {
-  generateStatusEl.textContent = "";
+/** -------------------- MESSAGE SENDER -------------------- **/
+/**
+ * Sends a report request to the background script.
+ *
+ * @param {"GENERATE_REPORT" | "GENERATE_CRITERIA_REPORT"} type
+ */
+function sendReportRequest(type) {
+  setStatus("");
 
   if (emailsFromCsv.length === 0) {
-    generateStatusEl.textContent =
-      "Please upload a CSV file with at least one email.";
-    generateStatusEl.style.color = "#f97316";
+    setStatus("Please upload a CSV file with at least one email.", "#f97316");
     return;
   }
 
   if (!isAuthenticated) {
-    generateStatusEl.textContent = "Please connect to Google Calendar first.";
-    generateStatusEl.style.color = "#f97316";
+    setStatus("Please connect to Google Calendar first.", "#f97316");
     return;
   }
 
   const datePayload = buildDateSelectionPayload();
-
   if (datePayload.error) {
-    generateStatusEl.textContent = datePayload.error;
-    generateStatusEl.style.color = "#f97316";
+    setStatus(datePayload.error, "#f97316");
     return;
   }
 
   const { dateRange, selectedDates } = datePayload;
 
-  generateBtn.disabled = true;
-  generateStatusEl.textContent = "Generating report...";
-  generateStatusEl.style.color = "#a5b4fc";
+  // Disable only the button being used
+  const btn = type === "GENERATE_REPORT" ? generateBtn : criteriaBtn;
+  if (btn) btn.disabled = true;
+
+  setStatus(
+    type === "GENERATE_REPORT"
+      ? "Generating report..."
+      : "Generating criteria report..."
+  );
 
   chrome.runtime.sendMessage(
     {
-      type: "GENERATE_REPORT",
+      type,
       payload: {
         emails: emailsFromCsv,
         dateRange,
@@ -316,86 +290,35 @@ generateBtn.addEventListener("click", () => {
       }
     },
     (response) => {
-      generateBtn.disabled = false;
+      if (btn) btn.disabled = false;
 
       if (chrome.runtime.lastError) {
-        generateStatusEl.textContent = `Error: ${chrome.runtime.lastError.message}`;
-        generateStatusEl.style.color = "#f97316";
+        setStatus(`Error: ${chrome.runtime.lastError.message}`, "#f97316");
         return;
       }
 
       if (!response || !response.ok) {
-        generateStatusEl.textContent = "The report could not be generated.";
-        generateStatusEl.style.color = "#f97316";
+        setStatus(
+          type === "GENERATE_REPORT"
+            ? "The report could not be generated."
+            : "The criteria report could not be generated.",
+          "#f97316"
+        );
         return;
       }
 
-      generateStatusEl.textContent =
-        "Report generated. Your CSV download should start soon.";
-      generateStatusEl.style.color = "#22c55e";
+      setStatus(
+        type === "GENERATE_REPORT"
+          ? "Report generated. Your CSV download should start soon."
+          : "Criteria report generated. Your CSV download should start soon.",
+        "#22c55e"
+      );
     }
   );
-});
+}
 
-criteriaBtn.addEventListener("click", () => {
-  generateStatusEl.textContent = "";
-
-  if (emailsFromCsv.length === 0) {
-    generateStatusEl.textContent =
-      "Please upload a CSV file with at least one email.";
-    generateStatusEl.style.color = "#f97316";
-    return;
-  }
-
-  if (!isAuthenticated) {
-    generateStatusEl.textContent = "Please connect to Google Calendar first.";
-    generateStatusEl.style.color = "#f97316";
-    return;
-  }
-
-  const datePayload = buildDateSelectionPayload();
-
-  if (datePayload.error) {
-    generateStatusEl.textContent = datePayload.error;
-    generateStatusEl.style.color = "#f97316";
-    return;
-  }
-
-  const { dateRange, selectedDates } = datePayload;
-
-  criteriaBtn.disabled = true;
-  generateStatusEl.textContent = "Generating criteria report...";
-  generateStatusEl.style.color = "#a5b4fc";
-
-  chrome.runtime.sendMessage(
-    {
-      type: "GENERATE_CRITERIA_REPORT",
-      payload: {
-        emails: emailsFromCsv,
-        dateRange,
-        selectedDates
-      }
-    },
-    (response) => {
-      criteriaBtn.disabled = false;
-
-      if (chrome.runtime.lastError) {
-        generateStatusEl.textContent = `Error: ${chrome.runtime.lastError.message}`;
-        generateStatusEl.style.color = "#f97316";
-        return;
-      }
-
-      if (!response || !response.ok) {
-        generateStatusEl.textContent =
-          "The criteria report could not be generated.";
-        generateStatusEl.style.color = "#f97316";
-        return;
-      }
-
-      generateStatusEl.textContent =
-        "Criteria report generated. Your CSV download should start soon.";
-      generateStatusEl.style.color = "#22c55e";
-    }
-  );
-});
-
+/** -------------------- BUTTON HANDLERS -------------------- **/
+generateBtn.addEventListener("click", () => sendReportRequest("GENERATE_REPORT"));
+criteriaBtn.addEventListener("click", () =>
+  sendReportRequest("GENERATE_CRITERIA_REPORT")
+);

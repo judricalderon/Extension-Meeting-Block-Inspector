@@ -1,5 +1,5 @@
 /* src/popup/popup.css */
-/* 
+/*
   popup.css – Styles for the Calendar-Analytics popup UI
 
   This stylesheet defines the visual layout, typography, and
@@ -10,10 +10,11 @@
   - Section cards with dark theme styling
   - Buttons for OAuth login and report generation
   - Status messages and helper text
-  - Date range option controls
+  - Date option controls
 
   The design follows a dark, compact interface suitable for browser popups.
 */
+
 body {
   margin: 0;
   padding: 0;
@@ -70,21 +71,20 @@ button {
   font-weight: 500;
 }
 
+/* OAuth button */
 #connectBtn {
   background: #2563eb;
   color: #f9fafb;
 }
 
-#generateBtn #criteriaBtn{
+/* Report buttons */
+#generateBtn,
+#criteriaBtn {
   background: #10b981;
   color: #022c22;
 }
 
-#generateBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
+#generateBtn:disabled,
 #criteriaBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
